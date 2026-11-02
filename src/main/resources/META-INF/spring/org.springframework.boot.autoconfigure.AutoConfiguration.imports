@@ -1,0 +1,3 @@
+ru.sbernpf.util.autoconfigure.SecureValidationAutoConfiguration
+ru.sbernpf.util.autoconfigure.SecureWebMvcAutoConfiguration
+ru.sbernpf.util.autoconfigure.SecureKafkaAutoConfiguration

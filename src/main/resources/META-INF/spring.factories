@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+ru.sbernpf.util.autoconfigure.SecureValidationAutoConfiguration,\nru.sbernpf.util.autoconfigure.SecureWebMvcAutoConfiguration,\nru.sbernpf.util.autoconfigure.SecureKafkaAutoConfiguration
