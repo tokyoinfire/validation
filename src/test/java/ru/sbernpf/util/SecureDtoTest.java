@@ -1,6 +1,8 @@
 package ru.sbernpf.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,6 +50,56 @@ class SecureDtoTest {
 
     @SecureDto
     public record RecordDto(String value, @SecureField(maxLength = 5) String code) {
+    }
+
+    /** Как Lombok {@code @Builder @Jacksonized}: Jackson десериализует через builder. */
+    @SecureDto
+    @JsonDeserialize(builder = BuilderDto.Builder.class)
+    public static final class BuilderDto {
+        @DateTimeRange(notInFuture = true)
+        private final LocalDate birthDate;
+
+        private BuilderDto(LocalDate birthDate) {
+            this.birthDate = birthDate;
+        }
+
+        @JsonPOJOBuilder(withPrefix = "")
+        public static final class Builder {
+            private LocalDate birthDate;
+
+            public Builder birthDate(LocalDate birthDate) {
+                this.birthDate = birthDate;
+                return this;
+            }
+
+            public BuilderDto build() {
+                return new BuilderDto(birthDate);
+            }
+        }
+    }
+
+    /** Builder без @SecureDto у результата не проверяется. */
+    @JsonDeserialize(builder = PlainBuilderDto.Builder.class)
+    public static final class PlainBuilderDto {
+        private final String name;
+
+        private PlainBuilderDto(String name) {
+            this.name = name;
+        }
+
+        @JsonPOJOBuilder(withPrefix = "")
+        public static final class Builder {
+            private String name;
+
+            public Builder name(String name) {
+                this.name = name;
+                return this;
+            }
+
+            public PlainBuilderDto build() {
+                return new PlainBuilderDto(name);
+            }
+        }
     }
 
     @SecureDto(maxCollectionSize = 2)
@@ -256,5 +308,15 @@ class SecureDtoTest {
         assertThrows(SecurityValidationException.class,
                 () -> mapper.readValue("[{\"name\":\"<script>\"}]",
                         mapper.getTypeFactory().constructCollectionType(List.class, PersonDto.class)));
+    }
+
+    @Test
+    void validatesBuilderBasedDto() {
+        String future = LocalDate.now().plusDays(10).toString();
+        SecurityValidationException e = assertThrows(SecurityValidationException.class,
+                () -> mapper.readValue("{\"birthDate\":\"" + future + "\"}", BuilderDto.class));
+        assertEquals(SecurityCheck.DATE_RANGE, e.getViolations().get(0).check());
+        assertDoesNotThrow(() -> mapper.readValue("{\"birthDate\":\"1985-05-20\"}", BuilderDto.class));
+        assertDoesNotThrow(() -> mapper.readValue("{\"name\":\"<script>\"}", PlainBuilderDto.class));
     }
 }

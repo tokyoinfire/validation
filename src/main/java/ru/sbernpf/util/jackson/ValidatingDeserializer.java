@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.deser.std.DelegatingDeserializer;
 import com.fasterxml.jackson.databind.jsontype.TypeDeserializer;
+import ru.sbernpf.util.SecureDto;
 import ru.sbernpf.util.SecureValidator;
 
 import java.io.IOException;
@@ -15,15 +16,18 @@ import java.io.IOException;
 class ValidatingDeserializer extends DelegatingDeserializer {
 
     private final SecureValidator validator;
+    /** Проверять, только если у результата есть {@link SecureDto} (десериализация через builder). */
+    private final boolean onlySecureResult;
 
-    ValidatingDeserializer(JsonDeserializer<?> delegate, SecureValidator validator) {
+    ValidatingDeserializer(JsonDeserializer<?> delegate, SecureValidator validator, boolean onlySecureResult) {
         super(delegate);
         this.validator = validator;
+        this.onlySecureResult = onlySecureResult;
     }
 
     @Override
     protected JsonDeserializer<?> newDelegatingInstance(JsonDeserializer<?> newDelegatee) {
-        return new ValidatingDeserializer(newDelegatee, validator);
+        return new ValidatingDeserializer(newDelegatee, validator, onlySecureResult);
     }
 
     @Override
@@ -49,6 +53,9 @@ class ValidatingDeserializer extends DelegatingDeserializer {
     }
 
     private Object validated(Object value) throws IOException {
+        if (onlySecureResult && (value == null || !value.getClass().isAnnotationPresent(SecureDto.class))) {
+            return value;
+        }
         validator.validateOrThrow(value);
         return value;
     }

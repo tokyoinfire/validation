@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationConfig;
+import com.fasterxml.jackson.databind.deser.BuilderBasedDeserializer;
 import com.fasterxml.jackson.databind.deser.BeanDeserializerModifier;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.BeanSerializerModifier;
@@ -34,7 +35,15 @@ public class SecureValidationModule extends SimpleModule {
             @Override
             public JsonDeserializer<?> modifyDeserializer(DeserializationConfig config, BeanDescription beanDesc,
                                                           JsonDeserializer<?> deserializer) {
-                return isSecure(beanDesc) ? new ValidatingDeserializer(deserializer, validator) : deserializer;
+                if (isSecure(beanDesc)) {
+                    return new ValidatingDeserializer(deserializer, validator, false);
+                }
+                if (deserializer instanceof BuilderBasedDeserializer) {
+                    // @JsonDeserialize(builder = ...), Lombok @Jacksonized: beanDesc описывает builder,
+                    // а не DTO, поэтому @SecureDto проверяем у построенного объекта
+                    return new ValidatingDeserializer(deserializer, validator, true);
+                }
+                return deserializer;
             }
         });
         setSerializerModifier(new BeanSerializerModifier() {
