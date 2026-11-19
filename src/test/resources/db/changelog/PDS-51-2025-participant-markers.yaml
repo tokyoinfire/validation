@@ -1,0 +1,223 @@
+databaseChangeLog:
+
+  # ---------- Журнал «Принадлежность к Перечням Росфинмониторинга» ----------
+  - changeSet:
+      id: PDS-51-2025-01-qpart_participantterrorist
+      author: sergey
+      comment: "Журнал признака «Принадлежность к Перечням Росфинмониторинга»"
+      changes:
+        - createSequence:
+            schemaName: qpartparticipant
+            sequenceName: qpart_participantterrorist_seq
+            startValue: 1
+            incrementBy: 1
+        - createTable:
+            schemaName: qpartparticipant
+            tableName: qpart_participantterrorist
+            remarks: "Журнал признака «Принадлежность к Перечням Росфинмониторинга»"
+            columns:
+              - column:
+                  name: participantterroristid
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_qpart_participantterrorist
+                    nullable: false
+              - column:
+                  name: participantid
+                  type: BIGINT
+                  remarks: "Ссылка на карточку ФЛ"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: isactive
+                  type: BOOLEAN
+                  remarks: "Признак установлен"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: startdate
+                  type: TIMESTAMP
+                  remarks: "Дата начала действия признака"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enddate
+                  type: TIMESTAMP
+                  remarks: "Дата окончания действия признака"
+              - column:
+                  name: createddate
+                  type: TIMESTAMP
+                  remarks: "Дата создания записи"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updateddate
+                  type: TIMESTAMP
+                  remarks: "Дата последнего изменения записи"
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_qpart_participantterrorist_participant
+            baseTableSchemaName: qpartparticipant
+            baseTableName: qpart_participantterrorist
+            baseColumnNames: participantid
+            referencedTableSchemaName: qpartparticipant
+            referencedTableName: qpart_participant
+            referencedColumnNames: participantid
+        - createIndex:
+            schemaName: qpartparticipant
+            tableName: qpart_participantterrorist
+            indexName: ix_qpart_participantterrorist_participantid
+            columns:
+              - column:
+                  name: participantid
+
+  - changeSet:
+      id: PDS-51-2025-02-qpart_participantterrorist-active-uq
+      author: sergey
+      comment: "Не более одной действующей записи на ФЛ"
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE UNIQUE INDEX ux_qpart_participantterrorist_active
+              ON qpartparticipant.qpart_participantterrorist (participantid)
+              WHERE isactive
+      rollback:
+        - dropIndex:
+            schemaName: qpartparticipant
+            tableName: qpart_participantterrorist
+            indexName: ux_qpart_participantterrorist_active
+
+  # ---------- Журнал «Недействительный паспорт» ----------
+  - changeSet:
+      id: PDS-51-2025-03-qpart_participantinvalidpassport
+      author: sergey
+      comment: "Журнал признака «Недействительный паспорт»"
+      changes:
+        - createSequence:
+            schemaName: qpartparticipant
+            sequenceName: qpart_participantinvalidpassport_seq
+            startValue: 1
+            incrementBy: 1
+        - createTable:
+            schemaName: qpartparticipant
+            tableName: qpart_participantinvalidpassport
+            remarks: "Журнал признака «Недействительный паспорт»"
+            columns:
+              - column:
+                  name: participantinvalidpassportid
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_qpart_participantinvalidpassport
+                    nullable: false
+              - column:
+                  name: participantid
+                  type: BIGINT
+                  remarks: "Ссылка на карточку ФЛ"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: isactive
+                  type: BOOLEAN
+                  remarks: "Признак установлен"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: startdate
+                  type: TIMESTAMP
+                  remarks: "Дата начала действия признака"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enddate
+                  type: TIMESTAMP
+                  remarks: "Дата окончания действия признака"
+              - column:
+                  name: createddate
+                  type: TIMESTAMP
+                  remarks: "Дата создания записи"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updateddate
+                  type: TIMESTAMP
+                  remarks: "Дата последнего изменения записи"
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_qpart_participantinvalidpassport_participant
+            baseTableSchemaName: qpartparticipant
+            baseTableName: qpart_participantinvalidpassport
+            baseColumnNames: participantid
+            referencedTableSchemaName: qpartparticipant
+            referencedTableName: qpart_participant
+            referencedColumnNames: participantid
+        - createIndex:
+            schemaName: qpartparticipant
+            tableName: qpart_participantinvalidpassport
+            indexName: ix_qpart_participantinvalidpassport_participantid
+            columns:
+              - column:
+                  name: participantid
+
+  - changeSet:
+      id: PDS-51-2025-04-qpart_participantinvalidpassport-active-uq
+      author: sergey
+      comment: "Не более одной действующей записи на ФЛ"
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE UNIQUE INDEX ux_qpart_participantinvalidpassport_active
+              ON qpartparticipant.qpart_participantinvalidpassport (participantid)
+              WHERE isactive
+      rollback:
+        - dropIndex:
+            schemaName: qpartparticipant
+            tableName: qpart_participantinvalidpassport
+            indexName: ux_qpart_participantinvalidpassport_active
+
+  # ---------- Серия и номер ДУЛ в журнале «Недействительный паспорт» ----------
+  - changeSet:
+      id: PDS-51-2025-05-qpart_participantinvalidpassport-dul
+      author: sergey
+      comment: "Серия и номер ДУЛ, признанного недействительным"
+      changes:
+        - addColumn:
+            schemaName: qpartparticipant
+            tableName: qpart_participantinvalidpassport
+            columns:
+              - column:
+                  name: identitycardseries
+                  type: VARCHAR(4)
+                  remarks: "Серия ДУЛ"
+              - column:
+                  name: identitycardnumber
+                  type: VARCHAR(6)
+                  remarks: "Номер ДУЛ"
+
+  # Поиск ДУЛ по серии и номеру в qpart_individualidentitycard (~9 млн строк).
+  # Создаётся без блокировки таблицы и только если такого индекса ещё нет.
+  - changeSet:
+      id: PDS-51-2025-06-qpart_individualidentitycard-series-number-ix
+      author: sergey
+      runInTransaction: false
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - indexExists:
+                schemaName: qpartparticipant
+                tableName: qpart_individualidentitycard
+                columnNames: identitycardseries, identitycardnumber
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: >-
+              CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_qpart_individualidentitycard_series_number
+              ON qpartparticipant.qpart_individualidentitycard (identitycardseries, identitycardnumber)
+      rollback:
+        - sql:
+            sql: DROP INDEX CONCURRENTLY IF EXISTS qpartparticipant.ix_qpart_individualidentitycard_series_number
