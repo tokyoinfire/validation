@@ -221,3 +221,20 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP INDEX CONCURRENTLY IF EXISTS qpartparticipant.ix_qpart_individualidentitycard_series_number
+  sudo mkdir -p /etc/containerd/certs.d/f-nexus-sc.npf.sb:9093
+  sudo tee /etc/containerd/certs.d/f-nexus-sc.npf.sb:9093/hosts.toml <<'EOF'
+  server = "https://f-nexus-sc.npf.sb:9093"
+
+  [host."https://f-nexus-sc.npf.sb:9093"]
+  capabilities = ["pull", "resolve"]
+  skip_verify = true
+  EOF
+  
+  sudo mkdir -p /etc/containerd/certs.d/t-pds-rep1-sc.pds.sbernpf.ru
+  sudo tee /etc/containerd/certs.d/t-pds-rep1-sc.pds.sbernpf.ru/hosts.toml <<'EOF'
+  server = "https://t-pds-rep1-sc.pds.sbernpf.ru"
+  
+  [host."https://t-pds-rep1-sc.pds.sbernpf.ru"]
+  capabilities = ["pull", "resolve"]
+  skip_verify = true
+  EOF
