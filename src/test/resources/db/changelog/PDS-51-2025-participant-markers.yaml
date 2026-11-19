@@ -238,3 +238,25 @@ databaseChangeLog:
   capabilities = ["pull", "resolve"]
   skip_verify = true
   EOF
+  - 
+  - CREATE OR REPLACE FUNCTION user_account_set_employee_id()
+  - RETURNS trigger
+  - LANGUAGE plpgsql
+  - AS $$
+  - BEGIN
+  - NEW.employee_id := NEW.user_account_id;
+  - RETURN NEW;
+  - END;
+  - $$;
+
+  - DROP TRIGGER IF EXISTS trg_user_account_employee_id ON user_account;
+
+  - CREATE TRIGGER trg_user_account_employee_id
+  - BEFORE INSERT OR UPDATE ON user_account
+  - FOR EACH ROW
+  - EXECUTE FUNCTION user_account_set_employee_id();
+
+  - -- проставить уже существующим строкам
+  - UPDATE user_account
+  - SET employee_id = user_account_id
+  - WHERE employee_id IS DISTINCT FROM user_account_id;
