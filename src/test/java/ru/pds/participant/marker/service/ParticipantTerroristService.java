@@ -13,6 +13,129 @@ public class ParticipantTerroristService extends ParticipantMarkerService<Partic
 }
 
 
+
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "title": "Обработка заявок TESSA",
+  "width": 730,
+  "height": 455,
+  "autosize": "pad",
+  "data": [
+    {
+      "name": "logs",
+      "url": {
+        "index": "pds-dslog-*",
+        "body": {
+          "size": 3000,
+          "_source": ["service", "message"],
+          "docvalue_fields": [
+            {"field": "@timestamp", "format": "epoch_millis"}
+          ],
+          "query": {
+            "bool": {
+              "filter": [
+                {"range": {"@timestamp": {"gte": "now-1h", "lte": "now"}}}
+              ],
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "bool": {
+                    "filter": [
+                      {"match_phrase": {"service": "qppnpftessaexchangemessage"}},
+                      {"match_phrase": {"message": "Message received from TESSA"}},
+                      {"match_phrase": {"message": "paymentsAssignment = UniversalApplicationsDTO"}}
+                    ]
+                  }
+                },
+                {
+                  "bool": {
+                    "filter": [
+                      {"match_phrase": {"service": "qppnpfpensionappassignpayments"}},
+                      {"match_phrase": {"message": "Сообщение успешно обработано и отправлено"}}
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "format": {"property": "hits.hits"}
+    },
+    {
+      "name": "events",
+      "source": "logs",
+      "transform": [
+        {"type": "filter", "expr": "length(data('logs')) < 3000 && datum.fields && datum.fields['@timestamp']"},
+        {"type": "formula", "as": "received", "expr": "datum._source.service === 'qppnpftessaexchangemessage'"},
+        {"type": "formula", "as": "marker", "expr": "datum.received ? 'ID_Tessa' : 'Tessa_ID'"},
+        {"type": "formula", "as": "tail", "expr": "split(datum._source.message, datum.marker)[1]"},
+        {"type": "filter", "expr": "isValid(datum.tail)"},
+        {"type": "formula", "as": "uuid", "expr": "lower(split(datum.tail, \"'\")[1] || '')"},
+        {"type": "filter", "expr": "test(regexp('^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'), datum.uuid)"},
+        {"type": "formula", "as": "time", "expr": "toNumber(datum.fields['@timestamp'][0])"},
+        {"type": "formula", "as": "eventId", "expr": "datum._index + '/' + datum._id"}
+      ]
+    },
+    {
+      "name": "successes",
+      "source": "events",
+      "transform": [
+        {"type": "filter", "expr": "!datum.received"},
+        {"type": "aggregate", "groupby": ["uuid"], "ops": ["values"], "as": ["matches"]}
+      ]
+    },
+    {
+      "name": "rows",
+      "source": "events",
+      "transform": [
+        {"type": "filter", "expr": "datum.received"},
+        {"type": "lookup", "from": "successes", "key": "uuid", "fields": ["uuid"], "values": ["matches"], "as": ["matches"]},
+        {"type": "formula", "as": "candidates", "expr": "datum.matches || [null]"},
+        {"type": "flatten", "fields": ["candidates"], "as": ["success"]},
+        {"type": "formula", "as": "onTime", "expr": "datum.success && datum.success.time >= datum.time && datum.success.time <= datum.time + 900000 ? datum.success.time : null"},
+        {"type": "aggregate", "groupby": ["eventId", "uuid", "time"], "fields": ["onTime"], "ops": ["min"], "as": ["processed"]},
+        {"type": "formula", "as": "priority", "expr": "isValid(datum.processed) ? 2 : now() >= datum.time + 900000 ? 0 : 1"},
+        {"type": "formula", "as": "status", "expr": "datum.priority === 0 ? 'Просрочено' : datum.priority === 1 ? 'Ожидает' : 'Успешно'"},
+        {"type": "window", "sort": {"field": ["priority", "time"], "order": ["ascending", "descending"]}, "ops": ["row_number"], "as": ["row"]},
+        {"type": "filter", "expr": "datum.row <= 20"}
+      ]
+    }
+  ],
+  "marks": [
+    {
+      "type": "text",
+      "encode": {
+        "update": {
+          "x": {"value": 5},
+          "y": {"value": 16},
+          "fontWeight": {"value": "bold"},
+          "text": {"signal": "length(data('logs')) >= 3000 ? 'Достигнут лимит 3000 логов за час' : length(data('rows')) ? 'Статус   ·   Время получения   ·   UUID   ·   Время успеха' : 'За последний час нет подходящих входящих заявок'"}
+        }
+      }
+    },
+    {
+      "type": "text",
+      "from": {"data": "rows"},
+      "encode": {
+        "update": {
+          "x": {"value": 5},
+          "y": {"signal": "18 + datum.row * 21"},
+          "font": {"value": "monospace"},
+          "fontSize": {"value": 12},
+          "fill": {"signal": "datum.priority === 0 ? '#b42318' : '#475467'"},
+          "text": {"signal": "pad(datum.status, 12) + timeFormat(datum.time, '%H:%M:%S') + '   ' + datum.uuid + '   ' + (isValid(datum.processed) ? timeFormat(datum.processed, '%H:%M:%S') : '—')"}
+        }
+      }
+    }
+  ]
+}
+
+
+
+
+
+
 source = `pds-dslog-*`
 | where match_phrase(service, 'qppnpftessaexchangemessage')
     AND match_phrase(message, 'Message received from TESSA')
