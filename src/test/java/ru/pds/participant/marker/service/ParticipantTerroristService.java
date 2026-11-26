@@ -13,6 +13,36 @@ public class ParticipantTerroristService extends ParticipantMarkerService<Partic
 }
 
 
+source = `pds-dslog-*`
+| where match_phrase(service, 'qppnpftessaexchangemessage')
+    AND match_phrase(message, 'Message received from TESSA')
+    AND match_phrase(message, 'paymentsAssignment = UniversalApplicationsDTO')
+| parse message "(?s).*?ID_Tessa[ ]*=[ ]*'(?<uuid>[0-9A-Fa-f-]{36})'.*"
+| where isnotnull(uuid) AND uuid != ''
+| eval tessaId = lower(uuid), received_at = `@timestamp`
+| eval deadline = timestampadd(MINUTE, 15, received_at)
+| fields tessaId, received_at, deadline
+| join type=left max=0 left=l right=r
+    on l.tessaId = r.successUuid
+    AND r.success_at >= l.received_at
+    AND r.success_at <= l.deadline
+    [
+      source = `pds-dslog-*`
+      | where match_phrase(service, 'qppnpfpensionappassignpayments')
+          AND match_phrase(message, 'Сообщение успешно обработано и отправлено')
+      | parse message "(?s).*?Tessa_ID[ ]*=[ ]*'(?<uuid>[0-9A-Fa-f-]{36})'.*"
+      | where isnotnull(uuid) AND uuid != ''
+      | eval successUuid = lower(uuid), success_at = `@timestamp`
+      | fields successUuid, success_at
+    ]
+| stats min(r.success_at) as processed_at
+    by l.tessaId as tessaId, l.received_at as received_at, l.deadline as deadline
+| eval status = if(isnotnull(processed_at), 'Успешно',
+                    if(now() >= deadline, 'Просрочено', 'Ожидает'))
+| sort - received_at
+
+
+
 def readUuid(String message, String key) {
     int keyAt = message.indexOf(key);
     if (keyAt < 0) return null;
