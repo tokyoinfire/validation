@@ -11,6 +11,78 @@ public class ParticipantTerroristService extends ParticipantMarkerService<Partic
         super(repository, ParticipantTerrorist::new, "Принадлежность к Перечням Росфинмониторинга");
     }
 }
+
+
+def readUuid(String message, String key) {
+    int keyAt = message.indexOf(key);
+    if (keyAt < 0) return null;
+
+    String tail = message.substring(keyAt + key.length()).trim();
+    if (!tail.startsWith("=")) return null;
+
+    tail = tail.substring(1).trim();
+    if (!tail.startsWith("'")) return null;
+
+    int end = tail.indexOf("'", 1);
+    if (end != 37) return null;
+
+    return tail.substring(1, end).toLowerCase();
+}
+
+long eventTime(def hit) {
+    return Long.parseLong(hit['fields']['@timestamp'][0].toString());
+}
+
+if (ctx.results == null || ctx.results.isEmpty()) return false;
+
+def result = ctx.results[0];
+def hits = result['hits']['hits'];
+if (result['timed_out'] == true || result['_shards']['failed'] > 0 ||
+    result['hits']['total']['value'] > hits.size()) return false;
+
+def successesByUuid = new HashMap();
+
+for (def hit : hits) {
+    def source = hit['_source'];
+    if (source['service'] != 'qppnpfpensionappassignpayments') continue;
+
+    def uuid = readUuid(source['message'], 'Tessa_ID');
+    if (uuid == null) continue;
+
+    if (!successesByUuid.containsKey(uuid)) {
+        successesByUuid.put(uuid, new ArrayList());
+    }
+    successesByUuid.get(uuid).add(eventTime(hit));
+}
+
+for (def hit : hits) {
+    def source = hit['_source'];
+    if (source['service'] != 'qppnpftessaexchangemessage') continue;
+
+    def uuid = readUuid(source['message'], 'ID_Tessa');
+    if (uuid == null) continue;
+
+    long startedAt = eventTime(hit);
+    long deadline = startedAt + 900000L;
+    boolean succeeded = false;
+
+    def successTimes = successesByUuid.get(uuid);
+    if (successTimes != null) {
+        for (def successAt : successTimes) {
+            if (successAt >= startedAt && successAt <= deadline) {
+                succeeded = true;
+                break;
+            }
+        }
+    }
+
+    if (!succeeded) return true;
+}
+
+return false;
+
+
+
 {
   "size": 1000,
   "track_total_hits": true,
