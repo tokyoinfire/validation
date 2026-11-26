@@ -11,7 +11,40 @@ public class ParticipantTerroristService extends ParticipantMarkerService<Partic
         super(repository, ParticipantTerrorist::new, "Принадлежность к Перечням Росфинмониторинга");
     }
 }
-
+{
+  "size": 1000,
+  "track_total_hits": true,
+  "_source": ["service", "message"],
+  "docvalue_fields": [
+    { "field": "@timestamp", "format": "epoch_millis" }
+  ],
+  "query": {
+    "bool": {
+      "minimum_should_match": 1,
+      "should": [
+        {
+          "bool": {
+            "filter": [
+              { "match_phrase": { "service": "qppnpftessaexchangemessage" } },
+              { "match_phrase": { "message": "Message received from TESSA" } },
+              { "match_phrase": { "message": "paymentsAssignment = UniversalApplicationsDTO" } },
+              { "range": { "@timestamp": { "gte": "now-20m", "lte": "now-15m" } } }
+            ]
+          }
+        },
+        {
+          "bool": {
+            "filter": [
+              { "match_phrase": { "service": "qppnpfpensionappassignpayments" } },
+              { "match_phrase": { "message": "Сообщение успешно обработано и отправлено" } },
+              { "range": { "@timestamp": { "gte": "now-20m", "lte": "now" } } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
 
 
 {
