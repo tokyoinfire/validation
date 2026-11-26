@@ -1,3 +1,190 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "title": "Обработка заявок TESSA",
+  "width": 730,
+  "autosize": "none",
+  "signals": [
+    {
+      "name": "height",
+      "update": "max(80, 40 + length(data('rows')) * 21)"
+    }
+  ],
+  "data": [
+    {
+      "name": "logs",
+      "url": {
+        "index": "pds-dslog-*",
+        "body": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                {"range": {"@timestamp": {"lte": "now"}}}
+              ],
+              "minimum_should_match": 1,
+              "should": [
+                {
+                  "bool": {
+                    "filter": [
+                      {"range": {"@timestamp": {"%timefilter%": true}}},
+                      {"match_phrase": {"service": "qppnpftessaexchangemessage"}},
+                      {"match_phrase": {"message": "Message received from TESSA"}},
+                      {"match_phrase": {"message": "paymentsAssignment = UniversalApplicationsDTO"}}
+                    ]
+                  }
+                },
+                {
+                  "bool": {
+                    "filter": [
+                      {
+                        "range": {
+                          "@timestamp": {
+                            "gte": {"%timefilter%": "min"},
+                            "lte": {"%timefilter%": "max", "shift": -15, "unit": "minute"}
+                          }
+                        }
+                      },
+                      {"match_phrase": {"service": "qppnpfpensionappassignpayments"}},
+                      {"match_phrase": {"message": "Сообщение успешно обработано и отправлено"}}
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "tessa_events": {
+              "scripted_metric": {
+                "init_script": "state.events = new ArrayList();",
+                "map_script": {
+                  "lang": "painless",
+                  "source": "def src = params['_source'];\nif (src == null || src.message == null || doc['@timestamp'].size() == 0) return;\nboolean received = 'qppnpftessaexchangemessage'.equals(src.service);\nString message = src.message;\nString marker = received ? 'ID_Tessa' : 'Tessa_ID';\nint at = message.indexOf(marker);\nif (at < 0) return;\nString tail = message.substring(at + marker.length()).trim();\nif (!tail.startsWith('=')) return;\ntail = tail.substring(1).trim();\nif (!tail.startsWith(\"'\")) return;\nint end = tail.indexOf(\"'\", 1);\nif (end != 37) return;\nString uuid = tail.substring(1, end).toLowerCase();\nlong timestamp = doc['@timestamp'].value.toInstant().toEpochMilli();\nstate.events.add(['uuid': uuid, 'time': timestamp, 'received': received]);"
+                },
+                "combine_script": "return state.events;",
+                "reduce_script": "def events = new ArrayList();\nfor (def shard : states) {\n  if (shard != null) events.addAll(shard);\n}\nreturn events;"
+              }
+            }
+          }
+        }
+      },
+      "format": {"property": "aggregations.tessa_events.value"}
+    },
+    {
+      "name": "events",
+      "source": "logs",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "test(regexp('^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'), datum.uuid)"
+        },
+        {"type": "identifier", "as": "eventId"}
+      ]
+    },
+    {
+      "name": "successes",
+      "source": "events",
+      "transform": [
+        {"type": "filter", "expr": "!datum.received"},
+        {
+          "type": "aggregate",
+          "groupby": ["uuid"],
+          "fields": ["time"],
+          "ops": ["values"],
+          "as": ["matches"]
+        }
+      ]
+    },
+    {
+      "name": "rows",
+      "source": "events",
+      "transform": [
+        {"type": "filter", "expr": "datum.received"},
+        {
+          "type": "lookup",
+          "from": "successes",
+          "key": "uuid",
+          "fields": ["uuid"],
+          "values": ["matches"],
+          "as": ["matches"]
+        },
+        {
+          "type": "formula",
+          "as": "candidates",
+          "expr": "datum.matches || [null]"
+        },
+        {"type": "flatten", "fields": ["candidates"], "as": ["success"]},
+        {
+          "type": "formula",
+          "as": "onTime",
+          "expr": "datum.success && datum.success.time >= datum.time && datum.success.time <= datum.time + 900000 ? datum.success.time : null"
+        },
+        {
+          "type": "aggregate",
+          "groupby": ["eventId", "uuid", "time"],
+          "fields": ["onTime"],
+          "ops": ["min"],
+          "as": ["processed"]
+        },
+        {
+          "type": "formula",
+          "as": "priority",
+          "expr": "isValid(datum.processed) ? 2 : now() >= datum.time + 900000 ? 0 : 1"
+        },
+        {
+          "type": "formula",
+          "as": "status",
+          "expr": "datum.priority === 0 ? 'Просрочено' : datum.priority === 1 ? 'Ожидает' : 'Успешно'"
+        },
+        {
+          "type": "window",
+          "sort": {
+            "field": ["priority", "time"],
+            "order": ["ascending", "descending"]
+          },
+          "ops": ["row_number"],
+          "as": ["row"]
+        }
+      ]
+    }
+  ],
+  "marks": [
+    {
+      "type": "text",
+      "encode": {
+        "update": {
+          "x": {"value": 5},
+          "y": {"value": 16},
+          "fontWeight": {"value": "bold"},
+          "text": {
+            "signal": "length(data('rows')) ? 'Статус   ·   Время получения   ·   UUID   ·   Время успеха' : 'За выбранный период нет подходящих входящих заявок'"
+          }
+        }
+      }
+    },
+    {
+      "type": "text",
+      "from": {"data": "rows"},
+      "encode": {
+        "update": {
+          "x": {"value": 5},
+          "y": {"signal": "18 + datum.row * 21"},
+          "font": {"value": "monospace"},
+          "fontSize": {"value": 12},
+          "fill": {
+            "signal": "datum.priority === 0 ? '#b42318' : '#475467'"
+          },
+          "text": {
+            "signal": "pad(datum.status, 12) + timeFormat(datum.time, '%d.%m %H:%M:%S') + '   ' + datum.uuid + '   ' + (isValid(datum.processed) ? timeFormat(datum.processed, '%d.%m %H:%M:%S') : '—')"
+          }
+        }
+      }
+    }
+  ]
+}
+
+
+
+
 package ru.pds.participant.marker.service;
 
 import org.springframework.stereotype.Service;
