@@ -14,6 +14,46 @@ public class ParticipantTerroristService extends ParticipantMarkerService<Partic
 
 
 
+"query": {
+  "bool": {
+    "filter": [
+      {"range": {"@timestamp": {"lte": "now"}}}
+    ],
+    "minimum_should_match": 1,
+    "should": [
+      {
+        "bool": {
+          "filter": [
+            {"range": {"@timestamp": {"%timefilter%": true}}},
+            {"match_phrase": {"service": "qppnpftessaexchangemessage"}},
+            {"match_phrase": {"message": "Message received from TESSA"}},
+            {"match_phrase": {"message": "paymentsAssignment = UniversalApplicationsDTO"}}
+          ]
+        }
+      },
+      {
+        "bool": {
+          "filter": [
+            {
+              "range": {
+                "@timestamp": {
+                  "gte": {"%timefilter%": "min"},
+                  "lte": {"%timefilter%": "max", "shift": -15, "unit": "minute"}
+                }
+              }
+            },
+            {"match_phrase": {"service": "qppnpfpensionappassignpayments"}},
+            {"match_phrase": {"message": "Сообщение успешно обработано и отправлено"}}
+          ]
+        }
+      }
+    ]
+  }
+}
+
+
+
+
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
   "title": "Обработка заявок TESSA",
