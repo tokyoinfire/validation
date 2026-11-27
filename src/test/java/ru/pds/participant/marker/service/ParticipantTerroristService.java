@@ -1,3 +1,56 @@
+
+BEGIN;
+
+WITH bank_mapping (old_bic, new_bic, new_corr_account, new_bank_name) AS (
+    VALUES
+        -- Excel
+        ('045655635', '043807606', '30101810300000000606', 'КУРСКОЕ ОТДЕЛЕНИЕ N8596'),
+        ('048952615', '047308602', '30101810000000000602', 'УЛЬЯНОВСКОЕ ОТДЕЛЕНИЕ N8588'),
+        ('041708602', '047308602', '30101810000000000602', 'УЛЬЯНОВСКОЕ ОТДЕЛЕНИЕ N8588'),
+        ('044206604', '040173604', '30101810200000000604', 'АЛТАЙСКОЕ ОТДЕЛЕНИЕ N8644'),
+        ('047601637', '049514608', '30101810500000000608', 'АБАКАНСКОЕ ОТДЕЛЕНИЕ N8602'),
+        ('046850649', '042007681', '30101810600000000681', 'ЦЕНТРАЛЬНО-ЧЕРНОЗЕМНЫЙ БАНК'),
+        ('041909644', '044705615', '30101810300000000615', 'МУРМАНСКОЕ ОТДЕЛЕНИЕ N8627'),
+        ('049401601', '048073601', '30101810300000000601', 'БАШКИРСКОЕ ОТДЕЛЕНИЕ N8598'),
+        ('049706609', '043304609', '30101810500000000609', 'КИРОВСКОЕ ОТДЕЛЕНИЕ N8612'),
+
+        -- Страница задачи
+        ('042908612', '043304609', '30101810500000000609', 'КИРОВСКОЕ ОТДЕЛЕНИЕ N8612'),
+        ('045805602', '044705615', '30101810300000000615', 'МУРМАНСКОЕ ОТДЕЛЕНИЕ N8627'),
+        ('046126614', '045402601', '30101810300000000601', 'ОРЛОВСКОЕ ОТДЕЛЕНИЕ № 8595'),
+        ('046902606', '047102651', '30101810800000000651', 'ЗАПАДНО-СИБИРСКОЕ ОТДЕЛЕНИЕ № 8647'),
+        ('048602673', '044705615', '30101810300000000615', 'МУРМАНСКОЕ ОТДЕЛЕНИЕ N8627'),
+        ('044442607', '042520607', '30101810900000000607', 'БАЙКАЛЬСКИЙ БАНК'),
+        ('041501601', '045402601', '30101810300000000601', 'ОРЛОВСКОЕ ОТДЕЛЕНИЕ № 8595')
+)
+UPDATE qpartparticipant.qpart_paymentdetail AS pd
+SET additionalinformation = (
+    pd.additionalinformation::jsonb || jsonb_build_object(
+        'bic',             m.new_bic,
+        'bankCorrAccount', m.new_corr_account,
+        'bankName',        m.new_bank_name
+    )
+)::text
+FROM bank_mapping AS m
+WHERE pd.status = 1
+  AND pd.additionalinformation::jsonb ->> 'bic' = m.old_bic
+  AND EXISTS (
+      SELECT 1
+      FROM qcppstatementforpayment.qcpp_pensionreestrcontents AS qp
+      JOIN qcppstatementforpayment.qcpp_statementforpayment AS qs
+        ON qs.pensionreestrid = qp.statementforpaymentid
+      WHERE qp.statementforpaymentid IN (4304, 4302)
+        AND qp.recipientid = pd.participantid
+  )
+RETURNING
+    pd.participantid,
+    m.old_bic,
+    pd.additionalinformation::jsonb ->> 'bic' AS new_bic,
+    pd.additionalinformation::jsonb ->> 'bankCorrAccount' AS new_corr_account,
+    pd.additionalinformation::jsonb ->> 'bankName' AS new_bank_name;
+
+ROLLBACK;
+
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
   "title": "Успешные и ожидающие заявки TESSA",
